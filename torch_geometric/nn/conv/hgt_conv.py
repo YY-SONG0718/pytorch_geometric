@@ -93,6 +93,8 @@ class HGTConv(MessagePassing):
             edge_type = '__'.join(edge_type)
             self.p_rel[edge_type] = Parameter(torch.empty(1, heads))
 
+        self.attention_weights = None
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -216,7 +218,7 @@ class HGTConv(MessagePassing):
             out = a_dict[node_type]
 
             if out.size(-1) == x_dict[node_type].size(-1):
-                alpha = self.skip[node_type].sigmoid()
+                alpha = self.skip[node_type].sigmoid()  
                 out = alpha * out + (1 - alpha) * x_dict[node_type]
             out_dict[node_type] = out
 
@@ -227,10 +229,45 @@ class HGTConv(MessagePassing):
                 size_i: Optional[int]) -> Tensor:
         alpha = (q_i * k_j).sum(dim=-1) * edge_attr
         alpha = alpha / math.sqrt(q_i.size(-1))
-        alpha = softmax(alpha, index, ptr, size_i)
+        alpha = softmax(alpha, index, ptr, size_i) # softmax get final attention weights
         out = v_j * alpha.view(-1, self.heads, 1)
+
+        self.attention_weights = alpha
+
         return out.view(-1, self.out_channels)
 
     def __repr__(self) -> str:
         return (f'{self.__class__.__name__}(-1, {self.out_channels}, '
                 f'heads={self.heads})')
+    
+
+    def get_attention_edges_with_weights(self, edge_index_dict: Dict[Tuple[str, str, str], torch.Tensor]) -> Dict[Tuple[str, str, str], List[Tuple[int, int, float]]]:
+        
+        attention_edges_with_weights = {}
+
+                # Initialize index counters for attention weights
+        attention_index = 0
+
+        # Iterate over edge types and their corresponding edge_index tensors
+        for edge_type, edge_index_tensor in data.edge_index_dict.items():
+
+            print(edge_type, attention_index)
+            src_nodes = edge_index_tensor[0]  # Extract source nodes
+            dst_nodes = edge_index_tensor[1]  # Extract destination nodes
+
+            # Initialize list to store (src, dst, weight) tuples
+            edge_list = []
+
+            # Iterate through each edge index and map to attention weights
+            for idx in range(src_nodes.size(0)):
+                src = int(src_nodes[idx])
+                dst = int(dst_nodes[idx])
+                weight = float(model.convs[0].attention_weights[attention_index].mean())
+
+                edge_list.append((src, dst, weight))
+                attention_index += 1  # Move to the next attention weight
+
+            # Store the list of (src, dst, weight) tuples for the current edge type
+            attention_edges_with_weights[edge_type] = edge_list
+        return attention_edges_with_weights
+    
