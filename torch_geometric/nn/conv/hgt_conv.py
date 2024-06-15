@@ -249,7 +249,7 @@ class HGTConv(MessagePassing):
         attention_index = 0
 
         # Iterate over edge types and their corresponding edge_index tensors
-        for edge_type, edge_index_tensor in data.edge_index_dict.items():
+        for edge_type, edge_index_tensor in edge_index_dict.items():
 
             print(edge_type, attention_index)
             src_nodes = edge_index_tensor[0]  # Extract source nodes
@@ -262,8 +262,7 @@ class HGTConv(MessagePassing):
             for idx in range(src_nodes.size(0)):
                 src = int(src_nodes[idx])
                 dst = int(dst_nodes[idx])
-                weight = float(model.convs[0].attention_weights[attention_index].mean())
-
+                weight = float(self.convs[-1].attention_weights[attention_index].mean())  # the last conv layer is the final attention weights
                 edge_list.append((src, dst, weight))
                 attention_index += 1  # Move to the next attention weight
 
