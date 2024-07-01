@@ -67,7 +67,10 @@ class HGTConv(MessagePassing):
         self.edge_types = metadata[1]
         self.edge_types_map = {edge_type: i for i, edge_type in enumerate(metadata[1])}
 
-        self.dst_node_types = set([key[-1] for key in self.edge_types])
+        self.dst_node_types = set(
+            [key[-1] for key in self.edge_types]
+        )  # only nodes that are destination types are encoded!!!!!
+        # therefore if want both, need both direction edges
 
         self.kqv_lin = HeteroDictLinear(self.in_channels, self.out_channels * 3)
 
@@ -205,13 +208,20 @@ class HGTConv(MessagePassing):
             num_nodes=k.size(0),
         )
 
-        out = self.propagate(edge_index, k=k, q=q, v=v, edge_attr=edge_attr)
+        out = self.propagate(
+            edge_index, k=k, q=q, v=v, edge_attr=edge_attr
+        )  # We then call propagate(), which internally calls message(), aggregate() and update()
 
         # Reconstruct output node embeddings dict:
         for node_type, start_offset in dst_offset.items():
             end_offset = start_offset + q_dict[node_type].size(0)
             if node_type in self.dst_node_types:
                 out_dict[node_type] = out[start_offset:end_offset]
+
+                # only nodes that are destination types are encoded!!!!!
+        # therefore if want both, need both direction edges
+
+        print(out_dict.keys())
 
         # Transform output node embeddings:
         a_dict = self.out_lin(
@@ -229,6 +239,8 @@ class HGTConv(MessagePassing):
                 alpha = self.skip[node_type].sigmoid()
                 out = alpha * out + (1 - alpha) * x_dict[node_type]
             out_dict[node_type] = out
+
+        print(out_dict.keys())
 
         return out_dict
 
